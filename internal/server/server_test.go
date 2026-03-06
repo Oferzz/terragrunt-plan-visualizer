@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -100,5 +101,84 @@ func TestHandleIndex(t *testing.T) {
 	body := w.Body.String()
 	if len(body) == 0 {
 		t.Error("expected non-empty HTML body")
+	}
+}
+
+func TestHandleApply_MethodNotAllowed(t *testing.T) {
+	s := New(0, testPlan())
+
+	req := httptest.NewRequest("GET", "/api/apply", nil)
+	w := httptest.NewRecorder()
+
+	s.handleApply(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleApply_NoApplyFunc(t *testing.T) {
+	s := New(0, testPlan())
+
+	req := httptest.NewRequest("POST", "/api/apply", nil)
+	w := httptest.NewRecorder()
+
+	s.handleApply(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestHandleAIAnalysis_GetEmpty(t *testing.T) {
+	s := New(0, testPlan())
+
+	req := httptest.NewRequest("GET", "/api/ai-analysis", nil)
+	w := httptest.NewRecorder()
+
+	s.handleAIAnalysis(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestHandleAIAnalysis_PostAndGet(t *testing.T) {
+	s := New(0, testPlan())
+
+	analysis := AIAnalysisData{
+		Findings:        []string{"Open security group detected"},
+		RiskSummary:     "Medium risk overall",
+		Recommendations: []string{"Restrict ingress rules"},
+	}
+	body, _ := json.Marshal(analysis)
+
+	// POST analysis
+	postReq := httptest.NewRequest("POST", "/api/ai-analysis", bytes.NewReader(body))
+	postW := httptest.NewRecorder()
+	s.handleAIAnalysis(postW, postReq)
+
+	if postW.Code != http.StatusOK {
+		t.Errorf("POST expected 200, got %d", postW.Code)
+	}
+
+	// GET it back
+	getReq := httptest.NewRequest("GET", "/api/ai-analysis", nil)
+	getW := httptest.NewRecorder()
+	s.handleAIAnalysis(getW, getReq)
+
+	if getW.Code != http.StatusOK {
+		t.Errorf("GET expected 200, got %d", getW.Code)
+	}
+
+	var result AIAnalysisData
+	if err := json.Unmarshal(getW.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(result.Findings) != 1 || result.Findings[0] != "Open security group detected" {
+		t.Errorf("unexpected findings: %v", result.Findings)
+	}
+	if result.RiskSummary != "Medium risk overall" {
+		t.Errorf("unexpected risk summary: %s", result.RiskSummary)
 	}
 }

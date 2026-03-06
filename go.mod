@@ -2,7 +2,10 @@ module github.com/ofertzadaka/terragrunt-plan-visualizer
 
 go 1.23.2
 
-require github.com/spf13/cobra v1.10.2
+require (
+	github.com/gorilla/websocket v1.5.3
+	github.com/spf13/cobra v1.10.2
+)
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
