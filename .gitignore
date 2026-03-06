@@ -1,0 +1,22 @@
+# Binaries
+tgviz
+*.exe
+dist/
+
+# Go
+vendor/
+
+# Node
+web/node_modules/
+web/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Worktrees
+.worktrees/
