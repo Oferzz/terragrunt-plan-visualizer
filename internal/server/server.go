@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os/exec"
 	"runtime"
@@ -12,12 +14,15 @@ import (
 	"github.com/ofertzadaka/terragrunt-plan-visualizer/internal/plan"
 )
 
+//go:embed static/*
+var staticFS embed.FS
+
 // Server holds the HTTP server and plan data.
 type Server struct {
-	port     int
-	plan     *plan.Plan
-	mu       sync.RWMutex
-	httpSrv  *http.Server
+	port    int
+	plan    *plan.Plan
+	mu      sync.RWMutex
+	httpSrv *http.Server
 }
 
 // New creates a new server instance.
@@ -57,7 +62,33 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/plan", s.handlePlan)
 	mux.HandleFunc("/api/status", s.handleStatus)
-	mux.HandleFunc("/", s.handleIndex)
+
+	// Serve embedded React app
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		panic(fmt.Sprintf("failed to create sub filesystem: %v", err))
+	}
+	fileServer := http.FileServer(http.FS(sub))
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// For SPA routing: serve index.html for non-file paths
+		path := r.URL.Path
+		if path != "/" {
+			// Try to serve the file directly
+			if _, err := fs.Stat(sub, path[1:]); err == nil {
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+		}
+		// Serve index.html for root and SPA routes
+		data, err := fs.ReadFile(sub, "index.html")
+		if err != nil {
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(data)
+	})
 }
 
 func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
@@ -71,11 +102,6 @@ func (s *Server) handlePlan(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
-}
-
-func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.Write(indexHTML)
 }
 
 // OpenBrowser opens the default browser to the given URL.
@@ -98,9 +124,3 @@ func OpenBrowser(url string) {
 	args = append(args, url)
 	exec.Command(cmd, args...).Start()
 }
-
-// Placeholder HTML - will be replaced by embedded React app in Phase 2
-var indexHTML = []byte(`<!DOCTYPE html>
-<html><head><title>tgviz - loading...</title></head>
-<body><p>Web UI placeholder. React app will be embedded here.</p></body></html>
-`)
