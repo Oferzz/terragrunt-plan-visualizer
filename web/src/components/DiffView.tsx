@@ -1,4 +1,4 @@
-import type { ResourceChange, AttributeChange } from '../types/plan'
+import type { ResourceChange, AttributeChange, FeatureRelevance } from '../types/plan'
 
 interface Props {
   resource: ResourceChange
@@ -117,6 +117,28 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '24px',
     textAlign: 'center',
   },
+  featureSection: {
+    marginBottom: '24px',
+    padding: '16px',
+    background: 'var(--bg-tertiary)',
+    borderRadius: '6px',
+    border: '1px solid var(--border)',
+  },
+  featureTitle: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '11px',
+    fontWeight: 600,
+    color: 'var(--text-secondary)',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    marginBottom: '10px',
+  },
+  featureReason: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    color: 'var(--text-primary)',
+    lineHeight: 1.5,
+  },
   arrow: {
     color: 'var(--text-muted)',
     textAlign: 'center' as const,
@@ -131,6 +153,12 @@ const actionColors: Record<string, { bg: string; text: string }> = {
   replace: { bg: 'rgba(176, 125, 255, 0.12)', text: 'var(--accent-purple)' },
   'create-before-delete': { bg: 'rgba(176, 125, 255, 0.12)', text: 'var(--accent-purple)' },
   'delete-before-create': { bg: 'rgba(176, 125, 255, 0.12)', text: 'var(--accent-purple)' },
+}
+
+const featureColors: Record<FeatureRelevance, { bg: string; text: string; label: string }> = {
+  expected: { bg: 'rgba(0, 229, 155, 0.12)', text: 'var(--accent-green)', label: 'expected' },
+  indirect: { bg: 'rgba(255, 184, 77, 0.12)', text: 'var(--accent-yellow)', label: 'indirect' },
+  unrelated: { bg: 'rgba(255, 74, 110, 0.12)', text: 'var(--accent-red)', label: 'unrelated' },
 }
 
 const riskColors: Record<string, { bg: string; text: string }> = {
@@ -207,6 +235,18 @@ export default function DiffView({ resource, showRisk }: Props) {
           }}>
             {resource.provider_name}
           </span>
+          {resource.feature_relevance && (() => {
+            const fc = featureColors[resource.feature_relevance]
+            return (
+              <span style={{
+                ...styles.metaTag,
+                background: fc.bg,
+                color: fc.text,
+              }}>
+                {fc.label}
+              </span>
+            )
+          })()}
         </div>
       </div>
 
@@ -219,6 +259,13 @@ export default function DiffView({ resource, showRisk }: Props) {
               <span>{reason}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {resource.feature_relevance && resource.feature_reason && (
+        <div style={styles.featureSection}>
+          <div style={styles.featureTitle}>Feature Relevance</div>
+          <div style={styles.featureReason}>{resource.feature_reason}</div>
         </div>
       )}
 

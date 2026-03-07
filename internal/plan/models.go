@@ -16,6 +16,27 @@ const (
 	ActionDeleteBeforeCreate Action = "delete-before-create"
 )
 
+// FeatureRelevance indicates how a resource change relates to the current git diff.
+type FeatureRelevance string
+
+const (
+	RelevanceExpected  FeatureRelevance = "expected"
+	RelevanceIndirect  FeatureRelevance = "indirect"
+	RelevanceUnrelated FeatureRelevance = "unrelated"
+)
+
+// FeatureContext holds the result of git-diff-based feature analysis.
+type FeatureContext struct {
+	BaseBranch      string   `json:"base_branch"`
+	FilesChanged    []string `json:"files_changed"`
+	ResourcesInDiff []string `json:"resources_in_diff"`
+	ModulesInDiff   []string `json:"modules_in_diff"`
+	ExpectedCount   int      `json:"expected_count"`
+	IndirectCount   int      `json:"indirect_count"`
+	UnrelatedCount  int      `json:"unrelated_count"`
+	Error           string   `json:"error,omitempty"`
+}
+
 // RiskLevel represents the severity of a change.
 type RiskLevel string
 
@@ -42,8 +63,10 @@ type ResourceChange struct {
 	Action       Action            `json:"action"`
 	ActionReason string            `json:"action_reason,omitempty"`
 	Attributes   []AttributeChange `json:"attributes,omitempty"`
-	RiskLevel    RiskLevel         `json:"risk_level"`
-	RiskReasons  []string          `json:"risk_reasons,omitempty"`
+	RiskLevel        RiskLevel        `json:"risk_level"`
+	RiskReasons      []string         `json:"risk_reasons,omitempty"`
+	FeatureRelevance FeatureRelevance `json:"feature_relevance,omitempty"`
+	FeatureReason    string           `json:"feature_reason,omitempty"`
 }
 
 // PlanSummary provides high-level counts of changes.
@@ -64,6 +87,7 @@ type Plan struct {
 	TerraformVersion string          `json:"terraform_version"`
 	ResourceChanges []ResourceChange `json:"resource_changes"`
 	Summary         PlanSummary      `json:"summary"`
+	FeatureContext  *FeatureContext  `json:"feature_context,omitempty"`
 	PlanFile        string           `json:"plan_file,omitempty"`
 	WorkingDir      string           `json:"working_dir,omitempty"`
 	Timestamp       time.Time        `json:"timestamp"`
@@ -95,11 +119,12 @@ type LockInfo struct {
 
 // CLIOutput is the top-level JSON structure output by tgviz for Claude Code consumption.
 type CLIOutput struct {
-	Status  string       `json:"status"` // "success", "error", "locked", "no_changes"
-	Plan    *Plan        `json:"plan,omitempty"`
-	Apply   *ApplyResult `json:"apply,omitempty"`
-	Lock    *LockInfo    `json:"lock,omitempty"`
-	Error   *CLIError    `json:"error,omitempty"`
+	Status  string          `json:"status"` // "success", "error", "locked", "no_changes"
+	Plan    *Plan           `json:"plan,omitempty"`
+	Apply   *ApplyResult    `json:"apply,omitempty"`
+	Lock    *LockInfo       `json:"lock,omitempty"`
+	Error   *CLIError       `json:"error,omitempty"`
+	Feature *FeatureContext `json:"feature,omitempty"`
 }
 
 // CLIError represents a structured error from the CLI.

@@ -8,6 +8,8 @@ export type Action =
 
 export type RiskLevel = 'high' | 'medium' | 'low';
 
+export type FeatureRelevance = 'expected' | 'indirect' | 'unrelated';
+
 export interface AttributeChange {
   name: string;
   old_value: unknown;
@@ -25,6 +27,8 @@ export interface ResourceChange {
   attributes?: AttributeChange[];
   risk_level: RiskLevel;
   risk_reasons?: string[];
+  feature_relevance?: FeatureRelevance;
+  feature_reason?: string;
 }
 
 export interface PlanSummary {
@@ -46,6 +50,18 @@ export interface Plan {
   plan_file?: string;
   working_dir?: string;
   timestamp: string;
+  feature_context?: FeatureContext;
+}
+
+export interface FeatureContext {
+  base_branch: string;
+  files_changed: string[];
+  resources_in_diff: string[];
+  modules_in_diff: string[];
+  expected_count: number;
+  indirect_count: number;
+  unrelated_count: number;
+  error?: string;
 }
 
 export interface ApplyLine {

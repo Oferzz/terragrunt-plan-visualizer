@@ -11,8 +11,9 @@ import (
 // PrintPlan outputs the plan as structured JSON to stdout.
 func PrintPlan(p *plan.Plan) error {
 	out := plan.CLIOutput{
-		Status: "success",
-		Plan:   p,
+		Status:  "success",
+		Plan:    p,
+		Feature: p.FeatureContext,
 	}
 	return printJSON(out)
 }

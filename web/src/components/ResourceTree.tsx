@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import type { ResourceChange, Action } from '../types/plan'
+import type { ResourceChange, Action, FeatureRelevance } from '../types/plan'
 
 interface Props {
   resources: ResourceChange[]
@@ -21,6 +21,14 @@ const riskDotColor = {
   medium: 'var(--accent-yellow)',
   low: 'var(--accent-green)',
 }
+
+const featureBadgeConfig: Record<FeatureRelevance, { label: string; color: string; bg: string }> = {
+  expected: { label: 'FEAT', color: 'var(--accent-green)', bg: 'rgba(0, 229, 155, 0.12)' },
+  indirect: { label: 'IND', color: 'var(--accent-yellow)', bg: 'rgba(255, 184, 77, 0.12)' },
+  unrelated: { label: 'UNR', color: 'var(--accent-red)', bg: 'rgba(255, 74, 110, 0.12)' },
+}
+
+type FeatureFilter = 'all' | FeatureRelevance
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -93,19 +101,59 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     minWidth: 0,
   },
+  featureBadge: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '9px',
+    fontWeight: 600,
+    padding: '1px 4px',
+    borderRadius: '2px',
+    letterSpacing: '0.3px',
+    flexShrink: 0,
+  },
+  filterBar: {
+    display: 'flex',
+    gap: '4px',
+    padding: '8px 16px',
+    borderBottom: '1px solid var(--border)',
+  },
+  filterBtn: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '10px',
+    fontWeight: 500,
+    padding: '3px 8px',
+    borderRadius: '3px',
+    border: '1px solid var(--border)',
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  filterBtnActive: {
+    borderColor: 'var(--accent-green)',
+    color: 'var(--accent-green)',
+    background: 'rgba(0, 229, 155, 0.08)',
+  },
 }
 
 export default function ResourceTree({ resources, selected, onSelect }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [featureFilter, setFeatureFilter] = useState<FeatureFilter>('all')
+
+  const hasFeatureData = resources.some(r => r.feature_relevance)
+
+  const filteredResources = useMemo(() => {
+    if (featureFilter === 'all') return resources
+    return resources.filter(r => r.feature_relevance === featureFilter)
+  }, [resources, featureFilter])
 
   const grouped = useMemo(() => {
     const groups: Record<string, ResourceChange[]> = {}
-    for (const r of resources) {
+    for (const r of filteredResources) {
       if (!groups[r.type]) groups[r.type] = []
       groups[r.type].push(r)
     }
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
-  }, [resources])
+  }, [filteredResources])
 
   const toggleGroup = (type: string) => {
     setCollapsed(prev => {
@@ -118,6 +166,22 @@ export default function ResourceTree({ resources, selected, onSelect }: Props) {
 
   return (
     <div style={styles.container}>
+      {hasFeatureData && (
+        <div style={styles.filterBar}>
+          {(['all', 'expected', 'indirect', 'unrelated'] as const).map(f => (
+            <button
+              key={f}
+              style={{
+                ...styles.filterBtn,
+                ...(featureFilter === f ? styles.filterBtnActive : {}),
+              }}
+              onClick={() => setFeatureFilter(f)}
+            >
+              {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
       {grouped.map(([type, items]) => {
         const isCollapsed = collapsed.has(type)
         return (
@@ -157,6 +221,16 @@ export default function ResourceTree({ resources, selected, onSelect }: Props) {
                 >
                   <span style={{ ...styles.actionBadge, color: cfg.color }}>{cfg.symbol}</span>
                   <span style={styles.resourceName} title={r.address}>{r.name}</span>
+                  {r.feature_relevance && (() => {
+                    const fb = featureBadgeConfig[r.feature_relevance]
+                    return (
+                      <span style={{
+                        ...styles.featureBadge,
+                        color: fb.color,
+                        background: fb.bg,
+                      }}>{fb.label}</span>
+                    )
+                  })()}
                   <span style={{ ...styles.riskDot, background: riskDotColor[r.risk_level] }} />
                 </div>
               )

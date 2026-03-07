@@ -5,6 +5,7 @@ import ResourceTree from './components/ResourceTree'
 import DiffView from './components/DiffView'
 import RiskPanel from './components/RiskPanel'
 import AIAnalysis from './components/AIAnalysis'
+import FeaturePanel from './components/FeaturePanel'
 
 const globalStyles = `
   *, *::before, *::after {
@@ -221,7 +222,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedResource, setSelectedResource] = useState<ResourceChange | null>(null)
-  const [activeTab, setActiveTab] = useState<'diff' | 'risk' | 'ai'>('diff')
+  const [activeTab, setActiveTab] = useState<'diff' | 'risk' | 'ai' | 'feature'>('diff')
 
   useEffect(() => {
     fetch('/api/plan')
@@ -315,7 +316,7 @@ function App() {
 
           <div style={s.rightPanel}>
             <div style={s.tabBar}>
-              {(['diff', 'risk', 'ai'] as const).map(tab => (
+              {(['diff', 'risk', 'ai', ...(plan.feature_context ? ['feature' as const] : [])] as const).map(tab => (
                 <button
                   key={tab}
                   style={{
@@ -324,7 +325,7 @@ function App() {
                   }}
                   onClick={() => setActiveTab(tab)}
                 >
-                  {tab === 'diff' ? 'Attribute Diff' : tab === 'risk' ? 'Risk Details' : 'AI Analysis'}
+                  {tab === 'diff' ? 'Attribute Diff' : tab === 'risk' ? 'Risk Details' : tab === 'ai' ? 'AI Analysis' : 'Feature Analysis'}
                 </button>
               ))}
             </div>
@@ -336,6 +337,9 @@ function App() {
                 <DiffView resource={selectedResource} showRisk />
               )}
               {activeTab === 'ai' && <AIAnalysis />}
+              {activeTab === 'feature' && plan.feature_context && (
+                <FeaturePanel featureContext={plan.feature_context} />
+              )}
             </div>
           </div>
         </div>

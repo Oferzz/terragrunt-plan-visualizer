@@ -143,6 +143,44 @@ func TestHandleAIAnalysis_GetEmpty(t *testing.T) {
 	}
 }
 
+func TestHandlePlan_WithFeatureContext(t *testing.T) {
+	p := testPlan()
+	p.FeatureContext = &plan.FeatureContext{
+		BaseBranch:      "main",
+		FilesChanged:    []string{"main.tf"},
+		ResourcesInDiff: []string{"aws_s3_bucket.test"},
+		ExpectedCount:   1,
+	}
+	p.ResourceChanges[0].FeatureRelevance = plan.RelevanceExpected
+	p.ResourceChanges[0].FeatureReason = "direct match"
+
+	s := New(0, p)
+
+	req := httptest.NewRequest("GET", "/api/plan", nil)
+	w := httptest.NewRecorder()
+
+	s.handlePlan(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var result plan.Plan
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if result.FeatureContext == nil {
+		t.Fatal("expected feature_context in response")
+	}
+	if result.FeatureContext.BaseBranch != "main" {
+		t.Errorf("expected base_branch 'main', got %s", result.FeatureContext.BaseBranch)
+	}
+	if result.ResourceChanges[0].FeatureRelevance != plan.RelevanceExpected {
+		t.Errorf("expected feature_relevance 'expected', got %s", result.ResourceChanges[0].FeatureRelevance)
+	}
+}
+
 func TestHandleAIAnalysis_PostAndGet(t *testing.T) {
 	s := New(0, testPlan())
 

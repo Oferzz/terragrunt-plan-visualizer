@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/ofertzadaka/terragrunt-plan-visualizer/internal/feature"
 	"github.com/ofertzadaka/terragrunt-plan-visualizer/internal/output"
 	"github.com/ofertzadaka/terragrunt-plan-visualizer/internal/plan"
 	"github.com/ofertzadaka/terragrunt-plan-visualizer/internal/risk"
@@ -20,6 +21,8 @@ var (
 	planTimeout  time.Duration
 	applyTimeout time.Duration
 	jsonOnly     bool
+	featureAware bool
+	baseBranch   string
 	version      = "dev"
 )
 
@@ -34,6 +37,8 @@ func main() {
 	rootCmd.PersistentFlags().DurationVar(&planTimeout, "plan-timeout", 30*time.Minute, "Plan execution timeout")
 	rootCmd.PersistentFlags().DurationVar(&applyTimeout, "apply-timeout", 60*time.Minute, "Apply execution timeout")
 	rootCmd.PersistentFlags().BoolVar(&jsonOnly, "json", false, "JSON-only output, no web UI")
+	rootCmd.PersistentFlags().BoolVar(&featureAware, "feature-aware", true, "Analyze git diff to classify changes as expected vs unrelated")
+	rootCmd.PersistentFlags().StringVar(&baseBranch, "base-branch", "main", "Base branch for git diff comparison")
 
 	rootCmd.AddCommand(planCmd())
 	rootCmd.AddCommand(showCmd())
@@ -95,6 +100,12 @@ func planCmd() *cobra.Command {
 			p.WorkingDir = dir
 			p.Timestamp = time.Now()
 
+			if featureAware {
+				diff := feature.AnalyzeGitDiff(dir, baseBranch)
+				featureCtx := feature.Correlate(p, diff)
+				p.FeatureContext = featureCtx
+			}
+
 			if jsonOnly {
 				return output.PrintPlan(p)
 			}
@@ -136,6 +147,12 @@ func showCmd() *cobra.Command {
 
 			risk.Analyze(p)
 			p.Timestamp = time.Now()
+
+			if featureAware {
+				diff := feature.AnalyzeGitDiff(".", baseBranch)
+				featureCtx := feature.Correlate(p, diff)
+				p.FeatureContext = featureCtx
+			}
 
 			if jsonOnly {
 				return output.PrintPlan(p)

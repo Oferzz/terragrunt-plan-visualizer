@@ -167,6 +167,94 @@ func TestCLIOutputContract_ErrorStructure(t *testing.T) {
 	}
 }
 
+func TestCLIOutputContract_FeatureContext(t *testing.T) {
+	p := &plan.Plan{
+		FormatVersion:    "1.2",
+		TerraformVersion: "1.5.0",
+		ResourceChanges: []plan.ResourceChange{
+			{
+				Address:      "aws_s3_bucket.feature",
+				Type:         "aws_s3_bucket",
+				Name:         "feature",
+				ProviderName: "registry.terraform.io/hashicorp/aws",
+				Action:       plan.ActionCreate,
+			},
+			{
+				Address:      "aws_instance.drift",
+				Type:         "aws_instance",
+				Name:         "drift",
+				ProviderName: "registry.terraform.io/hashicorp/aws",
+				Action:       plan.ActionUpdate,
+			},
+		},
+		Timestamp: time.Now(),
+	}
+
+	risk.Analyze(p)
+
+	// Simulate feature analysis
+	p.FeatureContext = &plan.FeatureContext{
+		BaseBranch:      "main",
+		FilesChanged:    []string{"s3.tf"},
+		ResourcesInDiff: []string{"aws_s3_bucket.feature"},
+		ModulesInDiff:   []string{},
+		ExpectedCount:   1,
+		IndirectCount:   0,
+		UnrelatedCount:  1,
+	}
+	p.ResourceChanges[0].FeatureRelevance = plan.RelevanceExpected
+	p.ResourceChanges[0].FeatureReason = "direct match"
+	p.ResourceChanges[1].FeatureRelevance = plan.RelevanceUnrelated
+	p.ResourceChanges[1].FeatureReason = "no connection to git diff found"
+
+	data, err := captureStdout(func() error { return PrintPlan(p) })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+
+	// Validate feature context at top level
+	featureData, ok := raw["feature"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected 'feature' object in output")
+	}
+
+	requiredFeatureFields := []string{
+		"base_branch", "files_changed", "resources_in_diff",
+		"expected_count", "indirect_count", "unrelated_count",
+	}
+	for _, field := range requiredFeatureFields {
+		if _, exists := featureData[field]; !exists {
+			t.Errorf("missing required feature field: %s", field)
+		}
+	}
+
+	if featureData["base_branch"] != "main" {
+		t.Errorf("expected base_branch 'main', got %v", featureData["base_branch"])
+	}
+
+	// Validate feature_relevance on resource changes
+	planData := raw["plan"].(map[string]interface{})
+	changes := planData["resource_changes"].([]interface{})
+
+	rc0 := changes[0].(map[string]interface{})
+	if rc0["feature_relevance"] != "expected" {
+		t.Errorf("expected feature_relevance 'expected', got %v", rc0["feature_relevance"])
+	}
+	if rc0["feature_reason"] != "direct match" {
+		t.Errorf("expected feature_reason 'direct match', got %v", rc0["feature_reason"])
+	}
+
+	rc1 := changes[1].(map[string]interface{})
+	if rc1["feature_relevance"] != "unrelated" {
+		t.Errorf("expected feature_relevance 'unrelated', got %v", rc1["feature_relevance"])
+	}
+}
+
 func TestCLIOutputContract_LockStructure(t *testing.T) {
 	cliErr := &plan.CLIError{Type: "lock", Message: "state is locked"}
 	lock := &plan.LockInfo{

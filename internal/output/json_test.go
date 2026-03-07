@@ -121,6 +121,82 @@ func TestPrintLockError(t *testing.T) {
 	}
 }
 
+func TestPrintPlanWithFeatureContext(t *testing.T) {
+	p := &plan.Plan{
+		FormatVersion:    "1.2",
+		TerraformVersion: "1.5.0",
+		ResourceChanges: []plan.ResourceChange{
+			{
+				Address: "aws_s3_bucket.test", Type: "aws_s3_bucket", Action: plan.ActionCreate,
+				RiskLevel: plan.RiskLow, FeatureRelevance: plan.RelevanceExpected, FeatureReason: "direct match",
+			},
+		},
+		Summary:   plan.PlanSummary{TotalChanges: 1, Adds: 1, LowRisk: 1},
+		Timestamp: time.Now(),
+		FeatureContext: &plan.FeatureContext{
+			BaseBranch:      "main",
+			FilesChanged:    []string{"main.tf"},
+			ResourcesInDiff: []string{"aws_s3_bucket.test"},
+			ExpectedCount:   1,
+		},
+	}
+
+	data, err := captureStdout(func() error { return PrintPlan(p) })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var out plan.CLIOutput
+	if err := json.Unmarshal(data, &out); err != nil {
+		t.Fatalf("failed to parse output JSON: %v", err)
+	}
+	if out.Feature == nil {
+		t.Fatal("expected feature context in output")
+	}
+	if out.Feature.BaseBranch != "main" {
+		t.Errorf("expected base branch 'main', got %s", out.Feature.BaseBranch)
+	}
+	if out.Feature.ExpectedCount != 1 {
+		t.Errorf("expected expected_count=1, got %d", out.Feature.ExpectedCount)
+	}
+	if out.Plan.ResourceChanges[0].FeatureRelevance != plan.RelevanceExpected {
+		t.Errorf("expected feature_relevance='expected', got %s", out.Plan.ResourceChanges[0].FeatureRelevance)
+	}
+}
+
+func TestPrintPlanWithoutFeatureContext(t *testing.T) {
+	p := &plan.Plan{
+		FormatVersion:    "1.2",
+		TerraformVersion: "1.5.0",
+		ResourceChanges: []plan.ResourceChange{
+			{Address: "aws_s3_bucket.test", Type: "aws_s3_bucket", Action: plan.ActionCreate, RiskLevel: plan.RiskLow},
+		},
+		Summary:   plan.PlanSummary{TotalChanges: 1, Adds: 1, LowRisk: 1},
+		Timestamp: time.Now(),
+	}
+
+	data, err := captureStdout(func() error { return PrintPlan(p) })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("failed to parse output JSON: %v", err)
+	}
+	if _, exists := raw["feature"]; exists {
+		t.Error("expected no 'feature' key when feature context is nil")
+	}
+
+	// Also verify feature_relevance is omitted from resource changes
+	planData := raw["plan"].(map[string]interface{})
+	changes := planData["resource_changes"].([]interface{})
+	rc := changes[0].(map[string]interface{})
+	if _, exists := rc["feature_relevance"]; exists {
+		t.Error("expected no 'feature_relevance' when not set")
+	}
+}
+
 func TestPrintApplyResult(t *testing.T) {
 	result := &plan.ApplyResult{
 		Success:          true,
