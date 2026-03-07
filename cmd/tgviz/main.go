@@ -23,6 +23,8 @@ var (
 	jsonOnly     bool
 	featureAware bool
 	baseBranch   string
+	analyze      bool
+	detailLevel  string
 	version      = "dev"
 )
 
@@ -39,6 +41,8 @@ func main() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOnly, "json", false, "JSON-only output, no web UI")
 	rootCmd.PersistentFlags().BoolVar(&featureAware, "feature-aware", true, "Analyze git diff to classify changes as expected vs unrelated")
 	rootCmd.PersistentFlags().StringVar(&baseBranch, "base-branch", "main", "Base branch for git diff comparison")
+	rootCmd.PersistentFlags().BoolVar(&analyze, "analyze", false, "Include risk analysis report in JSON output")
+	rootCmd.PersistentFlags().StringVar(&detailLevel, "detail", "low", "Analysis detail level: low, medium, high")
 
 	rootCmd.AddCommand(planCmd())
 	rootCmd.AddCommand(showCmd())
@@ -107,23 +111,34 @@ func planCmd() *cobra.Command {
 			}
 
 			if jsonOnly {
+				if analyze {
+					report := buildAnalysisReport(p)
+					return output.PrintPlanWithReport(p, report)
+				}
 				return output.PrintPlan(p)
 			}
 
 			// Start web UI
 			srv := server.New(port, p)
-			fmt.Fprintf(os.Stderr, "Web UI available at http://localhost:%d\n", port)
-
-			if !noBrowser {
-				server.OpenBrowser(fmt.Sprintf("http://localhost:%d", port))
-			}
 
 			// Also output JSON for Claude Code
-			if err := output.PrintPlan(p); err != nil {
-				return err
+			if analyze {
+				report := buildAnalysisReport(p)
+				if err := output.PrintPlanWithReport(p, report); err != nil {
+					return err
+				}
+			} else {
+				if err := output.PrintPlan(p); err != nil {
+					return err
+				}
 			}
 
-			return srv.ListenAndServe(ctx)
+			return srv.ListenAndServe(ctx, func(actualPort int) {
+				fmt.Fprintf(os.Stderr, "Web UI available at http://localhost:%d\n", actualPort)
+				if !noBrowser {
+					server.OpenBrowser(fmt.Sprintf("http://localhost:%d", actualPort))
+				}
+			})
 		},
 	}
 	return cmd
@@ -155,6 +170,10 @@ func showCmd() *cobra.Command {
 			}
 
 			if jsonOnly {
+				if analyze {
+					report := buildAnalysisReport(p)
+					return output.PrintPlanWithReport(p, report)
+				}
 				return output.PrintPlan(p)
 			}
 
@@ -162,13 +181,12 @@ func showCmd() *cobra.Command {
 			defer cancel()
 
 			srv := server.New(port, p)
-			fmt.Fprintf(os.Stderr, "Web UI available at http://localhost:%d\n", port)
-
-			if !noBrowser {
-				server.OpenBrowser(fmt.Sprintf("http://localhost:%d", port))
-			}
-
-			return srv.ListenAndServe(ctx)
+			return srv.ListenAndServe(ctx, func(actualPort int) {
+				fmt.Fprintf(os.Stderr, "Web UI available at http://localhost:%d\n", actualPort)
+				if !noBrowser {
+					server.OpenBrowser(fmt.Sprintf("http://localhost:%d", actualPort))
+				}
+			})
 		},
 	}
 	return cmd
@@ -249,6 +267,27 @@ func versionCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("tgviz %s\n", version)
 		},
+	}
+}
+
+func buildAnalysisReport(p *plan.Plan) *plan.AnalysisReport {
+	findings := risk.GenerateFindings(p)
+	recommendations := risk.GenerateRecommendations(p)
+
+	// In high detail mode, add per-resource risk reasons
+	if detailLevel == "high" || detailLevel == "medium" {
+		for _, rc := range p.ResourceChanges {
+			if len(rc.RiskReasons) > 0 && rc.RiskLevel != plan.RiskLow {
+				for _, reason := range rc.RiskReasons {
+					findings = append(findings, fmt.Sprintf("  %s: %s", rc.Address, reason))
+				}
+			}
+		}
+	}
+
+	return &plan.AnalysisReport{
+		Findings:        findings,
+		Recommendations: recommendations,
 	}
 }
 

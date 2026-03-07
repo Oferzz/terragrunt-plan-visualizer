@@ -117,14 +117,21 @@ type LockInfo struct {
 	Created   time.Time `json:"created"`
 }
 
+// AnalysisReport contains risk findings and recommendations.
+type AnalysisReport struct {
+	Findings        []string `json:"findings"`
+	Recommendations []string `json:"recommendations"`
+}
+
 // CLIOutput is the top-level JSON structure output by tgviz for Claude Code consumption.
 type CLIOutput struct {
-	Status  string          `json:"status"` // "success", "error", "locked", "no_changes"
-	Plan    *Plan           `json:"plan,omitempty"`
-	Apply   *ApplyResult    `json:"apply,omitempty"`
-	Lock    *LockInfo       `json:"lock,omitempty"`
-	Error   *CLIError       `json:"error,omitempty"`
-	Feature *FeatureContext `json:"feature,omitempty"`
+	Status   string           `json:"status"` // "success", "error", "locked", "no_changes"
+	Plan     *Plan            `json:"plan,omitempty"`
+	Apply    *ApplyResult     `json:"apply,omitempty"`
+	Lock     *LockInfo        `json:"lock,omitempty"`
+	Error    *CLIError        `json:"error,omitempty"`
+	Feature  *FeatureContext  `json:"feature,omitempty"`
+	Analysis *AnalysisReport  `json:"analysis,omitempty"`
 }
 
 // CLIError represents a structured error from the CLI.

@@ -18,6 +18,17 @@ func PrintPlan(p *plan.Plan) error {
 	return printJSON(out)
 }
 
+// PrintPlanWithReport outputs the plan with an analysis report as structured JSON to stdout.
+func PrintPlanWithReport(p *plan.Plan, report *plan.AnalysisReport) error {
+	out := plan.CLIOutput{
+		Status:   "success",
+		Plan:     p,
+		Feature:  p.FeatureContext,
+		Analysis: report,
+	}
+	return printJSON(out)
+}
+
 // PrintNoChanges outputs a no-changes result to stdout.
 func PrintNoChanges() error {
 	out := plan.CLIOutput{

@@ -26,6 +26,7 @@ var upgrader = websocket.Upgrader{
 // Server holds the HTTP server and plan data.
 type Server struct {
 	port        int
+	actualPort  int
 	plan        *plan.Plan
 	mu          sync.RWMutex
 	httpSrv     *http.Server
@@ -57,12 +58,19 @@ func (s *Server) SetApplyFunc(fn func(ctx context.Context, outputFn func(line st
 }
 
 // ListenAndServe starts the HTTP server and blocks until context is cancelled.
-func (s *Server) ListenAndServe(ctx context.Context) error {
+// onReady is called with the actual bound port after successful port resolution.
+func (s *Server) ListenAndServe(ctx context.Context, onReady func(port int)) error {
+	resolvedPort, err := resolvePort(s.port, maxPortAttempts, nil)
+	if err != nil {
+		return fmt.Errorf("failed to find available port: %w", err)
+	}
+	s.actualPort = resolvedPort
+
 	mux := http.NewServeMux()
 	s.registerRoutes(mux)
 
 	s.httpSrv = &http.Server{
-		Addr:    fmt.Sprintf(":%d", s.port),
+		Addr:    fmt.Sprintf(":%d", s.actualPort),
 		Handler: mux,
 	}
 
@@ -74,12 +82,21 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		close(errCh)
 	}()
 
+	if onReady != nil {
+		onReady(s.actualPort)
+	}
+
 	select {
 	case <-ctx.Done():
 		return s.httpSrv.Shutdown(context.Background())
 	case err := <-errCh:
 		return err
 	}
+}
+
+// ActualPort returns the port the server bound to.
+func (s *Server) ActualPort() int {
+	return s.actualPort
 }
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
